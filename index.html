@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101827">
+  <title>DisparaWhats • Administração</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#e8edf7;background:#0b1220;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 85% 0,#183b36 0,transparent 34%),#0b1220}
+    button,input{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:12px 16px;font-weight:700;background:#19b879;color:#062016}
+    button:disabled{opacity:.55;cursor:not-allowed}.secondary{background:#263449;color:#e8edf7}.danger{background:#6f2634;color:#fff}
+    .wrap{width:min(1100px,calc(100% - 32px));margin:0 auto;padding:36px 0}.brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+    .mark{width:44px;height:44px;border-radius:14px;background:#19b879;color:#062016;display:grid;place-items:center;font-size:22px;font-weight:900}
+    h1{font-size:24px;margin:0} .muted{color:#9eabc0}.panel{background:#131e2e;border:1px solid #26364b;border-radius:18px;padding:22px;box-shadow:0 18px 55px #0003}
+    .login{max-width:430px;margin:8vh auto}.field{display:grid;gap:7px;margin:14px 0}.field label{font-size:13px;color:#b8c5d8}
+    input{width:100%;border:1px solid #33445d;background:#0d1726;color:#fff;border-radius:10px;padding:13px;outline:none}input:focus{border-color:#19b879}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .hidden{display:none!important}.status{min-height:22px;margin-top:12px;color:#f5c56a;font-size:14px}.stats{font-size:13px;color:#9eabc0}
+    .user{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #26364b}.user:last-child{border:0}
+    .user strong{display:block;overflow-wrap:anywhere}.user small{color:#9eabc0}.user button{padding:9px 12px;font-size:12px}
+    .section-title{margin:0 0 14px;font-size:17px}.full{width:100%}.top-actions{display:flex;gap:10px;align-items:center}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:22px 0}.panel{padding:17px}.user{align-items:flex-start}.user button{white-space:nowrap}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="brand"><div class="mark">D</div><div><h1>DisparaWhats Admin</h1><div class="muted">Gerenciamento de contas</div></div></header>
+    <section id="loginView" class="panel login">
+      <h2 style="margin-top:0">Acesso administrativo</h2>
+      <p class="muted">Entre com sua conta autorizada.</p>
+      <form id="loginForm">
+        <div class="field"><label for="loginEmail">E-mail</label><input id="loginEmail" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="loginPassword">Senha</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+        <button class="full" id="loginButton">Entrar</button>
+      </form>
+      <div id="loginStatus" class="status" role="status"></div>
+    </section>
+
+    <section id="adminView" class="hidden">
+      <div class="row between" style="margin-bottom:18px">
+        <div><div class="muted">Painel de controle</div><strong id="adminEmail"></strong></div>
+        <div class="top-actions"><button id="refreshButton" class="secondary">Atualizar</button><button id="logoutButton" class="secondary">Sair</button></div>
+      </div>
+      <div class="grid">
+        <section class="panel">
+          <h2 class="section-title">Cadastrar usuário</h2>
+          <form id="createForm">
+            <div class="field"><label for="newEmail">E-mail do usuário</label><input id="newEmail" type="email" required></div>
+            <div class="field"><label for="newPassword">Senha inicial (mínimo 6 caracteres)</label><input id="newPassword" type="password" minlength="6" required></div>
+            <div class="field"><label for="newName">Nome (opcional)</label><input id="newName" type="text" autocomplete="off"></div>
+            <button id="createButton" class="full">Criar conta</button>
+          </form>
+          <div id="createStatus" class="status" role="status"></div>
+        </section>
+        <section class="panel">
+          <div class="row between"><h2 class="section-title">Contas cadastradas</h2><span id="userCount" class="stats"></span></div>
+          <div class="field"><label for="searchUsers">Pesquisar por e-mail ou nome</label><input id="searchUsers" type="search" placeholder="Digite para filtrar..."></div>
+          <div id="usersList"><p class="muted">Carregando usuários...</p></div>
+          <button id="loadMoreButton" class="secondary full hidden" style="margin-top:14px">Carregar mais</button>
+          <div id="listStatus" class="status" role="status"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAoIkSJJWsl7J3cXw1VJ_-lSDBYczKpcjc",
+      authDomain: "disparawhats-e86a4.firebaseapp.com",
+      projectId: "disparawhats-e86a4",
+      storageBucket: "disparawhats-e86a4.firebasestorage.app",
+      messagingSenderId: "271538154245",
+      appId: "1:271538154245:web:8d94daa73c0e95b2ffe56c"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const functions = getFunctions(app, "us-central1");
+    const listUsersCall = httpsCallable(functions, "adminListUsers");
+    const createUserCall = httpsCallable(functions, "adminCreateUser");
+    const deleteUserCall = httpsCallable(functions, "adminDeleteUser");
+
+    const $ = id => document.getElementById(id);
+    let users = [], nextPageToken = null, loading = false;
+    const status = (id, message, error=false) => { $(id).textContent = message; $(id).style.color = error ? "#ff9a9a" : "#f5c56a"; };
+    const show = (id, yes) => $(id).classList.toggle("hidden", !yes);
+
+    $("loginForm").addEventListener("submit", async e => {
+      e.preventDefault(); $("loginButton").disabled = true; status("loginStatus", "Entrando...");
+      try { await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginPassword").value); }
+      catch(err) { status("loginStatus", friendlyError(err), true); }
+      finally { $("loginButton").disabled = false; }
+    });
+    $("logoutButton").addEventListener("click", () => signOut(auth));
+    $("refreshButton").addEventListener("click", () => loadUsers(true));
+    $("loadMoreButton").addEventListener("click", () => loadUsers(false));
+    $("searchUsers").addEventListener("input", renderUsers);
+
+    onAuthStateChanged(auth, async user => {
+      show("loginView", !user); show("adminView", !!user);
+      if (!user) { users=[]; return; }
+      $("adminEmail").textContent = user.email || "Administrador";
+      await loadUsers(true);
+    });
+
+    $("createForm").addEventListener("submit", async e => {
+      e.preventDefault(); $("createButton").disabled = true; status("createStatus", "Criando conta...");
+      try {
+        const result = await createUserCall({
+          email: $("newEmail").value.trim(),
+          password: $("newPassword").value,
+          displayName: $("newName").value.trim()
+        });
+        status("createStatus", "Conta criada: " + result.data.email);
+        $("createForm").reset(); await loadUsers(true);
+      } catch(err) { status("createStatus", friendlyError(err), true); }
+      finally { $("createButton").disabled = false; }
+    });
+
+    async function loadUsers(reset) {
+      if (loading) return; loading = true; $("refreshButton").disabled = true;
+      status("listStatus", "Buscando contas...");
+      try {
+        if (reset) { users=[]; nextPageToken=null; }
+        const result = await listUsersCall({ pageToken: nextPageToken });
+        users = users.concat(result.data.users || []);
+        nextPageToken = result.data.nextPageToken || null;
+        renderUsers(); show("loadMoreButton", !!nextPageToken);
+        status("listStatus", "");
+      } catch(err) {
+        status("listStatus", friendlyError(err), true);
+        if (err.code === "functions/permission-denied" || err.code === "functions/unauthenticated") {
+          status("listStatus", "Acesso negado. Esta conta ainda não foi autorizada como administradora.", true);
+        }
+      } finally { loading=false; $("refreshButton").disabled=false; }
+    }
+
+    function renderUsers() {
+      const term = $("searchUsers").value.trim().toLowerCase();
+      const filtered = users.filter(u => (u.email || "").toLowerCase().includes(term) || (u.displayName || "").toLowerCase().includes(term));
+      $("userCount").textContent = users.length + " carregado(s)";
+      $("usersList").replaceChildren();
+      if (!filtered.length) { const p=document.createElement("p"); p.className="muted"; p.textContent=users.length ? "Nenhum resultado para essa pesquisa." : "Nenhuma conta encontrada."; $("usersList").append(p); return; }
+      filtered.forEach(u => {
+        const item=document.createElement("div"); item.className="user";
+        const info=document.createElement("div"); const name=document.createElement("strong"); name.textContent=u.displayName || u.email || "(sem e-mail)";
+        const meta=document.createElement("small"); meta.textContent=u.email || u.uid;
+        info.append(name,meta);
+        const del=document.createElement("button"); del.className="danger"; del.textContent="Excluir";
+        del.addEventListener("click", async () => {
+          if (!confirm("Excluir definitivamente a conta " + (u.email || u.uid) + " do Firebase Authentication?")) return;
+          del.disabled=true;
+          try { await deleteUserCall({ uid:u.uid }); users=users.filter(x=>x.uid!==u.uid); renderUsers(); status("listStatus","Conta excluída."); }
+          catch(err) { status("listStatus",friendlyError(err),true); del.disabled=false; }
+        });
+        item.append(info,del); $("usersList").append(item);
+      });
+    }
+    function friendlyError(err) {
+      const code = (err && err.code) || "";
+      const map = {
+        "auth/invalid-credential":"E-mail ou senha incorretos.",
+        "auth/too-many-requests":"Muitas tentativas. Aguarde e tente novamente.",
+        "functions/permission-denied":"Sua conta não tem permissão de administrador.",
+        "functions/unauthenticated":"Faça login novamente.",
+        "functions/already-exists":"Já existe uma conta com esse e-mail.",
+        "functions/invalid-argument":"Confira os dados informados.",
+        "functions/failed-precondition":"O serviço ainda não está configurado."
+      };
+      return map[code] || (err && err.message) || "Ocorreu um erro inesperado.";
+    }
+  </script>
+</body>
+</html>
