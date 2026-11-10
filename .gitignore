@@ -1,0 +1,10 @@
+node_modules/
+functions/node_modules/
+.firebase/
+.firebase/
+.env
+.env.*
+service-account*.json
+*-service-account*.json
+google-application-credentials.json
+.DS_Store
